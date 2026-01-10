@@ -1,0 +1,4 @@
+telethon
+feedparser
+beautifulsoup4
+requests
