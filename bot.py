@@ -12,7 +12,7 @@ from bs4 import BeautifulSoup
 
 # ============ CONFIGURATION ============
 # Telegram API credentials - Can be set via environment variables or directly
-TELEGRAM_API_ID = os.getenv('TELEGRAM_API_ID', 37901087 )
+TELEGRAM_API_ID = int(os.getenv('TELEGRAM_API_ID', '37901087'))
 TELEGRAM_API_HASH = os.getenv('TELEGRAM_API_HASH', '8cee27b5b47189cebcb36c2a3f1079b3')
 TELEGRAM_PHONE = os.getenv('TELEGRAM_PHONE', '+2348062550412')
 
@@ -27,15 +27,13 @@ CHECK_INTERVAL = 2  # Check every 2 seconds - BLAZING FAST!
 
 # Nitter instances (Twitter mirrors that provide RSS)
 NITTER_INSTANCES = [
+    'https://xcancel.com',
+    'https://nitter.poast.org',
+    'https://nitter.privacydev.net',
     'https://nitter.net',
     'https://nitter.cz',
     'https://nitter.privacyredirect.com',
-    'https://xcancel.com',
-    'https://lightbrd.com',
-     'https://nitter.catsarch.com',
-    'https://nitter.space',
-    
-
+    'https://nitter.freedit.eu'
 ]
 
 # ============ DATABASE SETUP ============
@@ -313,61 +311,80 @@ class RSSMonitor:
             if not self.working_instance:
                 return None
         
-        try:
-            rss_url = f"{self.working_instance}/{username}/rss"
-            print(f"   📡 Fetching RSS: {rss_url}")
-            
-            response = requests.get(
-                rss_url, 
-                timeout=10,
-                headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-            )
-            
-            if response.status_code == 200:
-                feed = feedparser.parse(response.content)
+        # Try current instance first, then others if it fails
+        instances_to_try = [self.working_instance] + [i for i in NITTER_INSTANCES if i != self.working_instance]
+        
+        for instance in instances_to_try[:3]:  # Try up to 3 instances
+            try:
+                rss_url = f"{instance}/{username}/rss"
+                print(f"   📡 Fetching RSS: {rss_url}")
                 
-                if feed.bozo:  # Feed parsing error
-                    print(f"   ⚠️  RSS parsing error: {feed.bozo_exception}")
-                    print(f"   🔄 Trying next instance...")
-                    # Try next instance
-                    current_index = NITTER_INSTANCES.index(self.working_instance)
-                    next_instance = NITTER_INSTANCES[(current_index + 1) % len(NITTER_INSTANCES)]
-                    self.working_instance = next_instance
-                    return None
+                response = requests.get(
+                    rss_url, 
+                    timeout=15,
+                    headers={
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                        'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+                        'Accept-Language': 'en-US,en;q=0.9',
+                        'Accept-Encoding': 'gzip, deflate, br',
+                        'Connection': 'keep-alive',
+                        'Referer': f'{instance}/'
+                    }
+                )
                 
-                if not feed.entries:
-                    print(f"   ⚠️  RSS feed is empty (no tweets found)")
-                    print(f"   💡 Account might be private, suspended, or has no tweets")
-                    return None
+                if response.status_code == 200:
+                    print(f"   ✅ Got response (200 OK), parsing feed...")
                     
-                print(f"   ✅ Successfully fetched {len(feed.entries)} tweets")
-                return feed.entries
-                
-            elif response.status_code == 403:
-                print(f"   🚫 BLOCKED: RSS feed returned 403 (IP blocked or rate limited)")
-                print(f"   🔄 Trying next instance...")
-                self.find_working_instance()
-                return None
-            elif response.status_code == 404:
-                print(f"   ❌ NOT FOUND: User @{username} not found or account suspended")
-                return None
-            elif response.status_code == 429:
-                print(f"   ⏱️  RATE LIMITED: Too many requests to {self.working_instance}")
-                print(f"   🔄 Trying next instance...")
-                self.find_working_instance()
-                return None
-            else:
-                print(f"   ❌ ERROR: RSS feed returned status {response.status_code}")
-                return None
-                
-        except requests.exceptions.Timeout:
-            print(f"   ⏱️  TIMEOUT: RSS request took too long")
-            print(f"   🔄 Trying next instance...")
-            self.find_working_instance()
-            return None
-        except Exception as e:
-            print(f"   ❌ ERROR fetching RSS: {type(e).__name__}: {str(e)[:100]}")
-            return None
+                    # Try to parse the feed
+                    feed = feedparser.parse(response.content)
+                    
+                    if feed.bozo and feed.bozo_exception:
+                        print(f"   ⚠️  RSS parsing error: {feed.bozo_exception}")
+                        continue
+                    
+                    if not feed.entries:
+                        print(f"   ⚠️  Feed has no entries")
+                        print(f"   💡 Possible reasons: private account, no tweets, or blocked")
+                        
+                        # Check if the response looks like a valid RSS feed
+                        if b'<?xml' not in response.content[:100]:
+                            print(f"   ⚠️  Response doesn't look like XML, might be blocked")
+                            continue
+                        else:
+                            # Valid XML but no tweets - account might be empty or private
+                            return []
+                    
+                    # Success!
+                    print(f"   ✅ Successfully fetched {len(feed.entries)} tweets from {instance}")
+                    self.working_instance = instance  # Update working instance
+                    return feed.entries
+                    
+                elif response.status_code == 403:
+                    print(f"   🚫 BLOCKED (403) at {instance}")
+                    continue
+                elif response.status_code == 404:
+                    print(f"   ❌ NOT FOUND (404): User @{username} might not exist")
+                    return None
+                elif response.status_code == 429:
+                    print(f"   ⏱️  RATE LIMITED (429) at {instance}")
+                    continue
+                elif response.status_code == 503:
+                    print(f"   ⚠️  SERVICE UNAVAILABLE (503) at {instance}")
+                    continue
+                else:
+                    print(f"   ❌ HTTP {response.status_code} from {instance}")
+                    continue
+                    
+            except requests.exceptions.Timeout:
+                print(f"   ⏱️  TIMEOUT at {instance}")
+                continue
+            except Exception as e:
+                print(f"   ❌ ERROR with {instance}: {type(e).__name__}: {str(e)[:100]}")
+                continue
+        
+        print(f"   ❌ Failed to fetch RSS from all attempted instances")
+        print(f"   💡 Suggestion: Try a different Twitter account or wait a few minutes")
+        return None
     
     def extract_tweet_id(self, link):
         """Extract tweet ID from link"""
@@ -400,6 +417,7 @@ async def start_command(event, bot):
         "/remove @username - Remove account\n"
         "/list - Show monitored accounts\n"
         "/stats - View statistics\n"
+        "/test @username - Test RSS for an account\n"
         "/help - Show this message",
         buttons=buttons
     )
@@ -449,7 +467,56 @@ async def list_command(event, bot):
     else:
         await event.respond("No accounts being monitored. Use /add @username to start.")
 
-async def stats_command(event, bot):
+async def test_command(event, bot, rss_monitor):
+    """Test RSS fetching for a specific account"""
+    try:
+        username = event.message.text.split()[1].replace('@', '')
+        
+        await event.respond(f"🧪 Testing RSS fetch for @{username}...\n\nCheck your terminal for detailed logs!")
+        
+        print(f"\n{'='*60}")
+        print(f"🧪 MANUAL TEST FOR @{username}")
+        print(f"{'='*60}")
+        
+        entries = rss_monitor.get_rss_feed(username)
+        
+        if entries is None:
+            await event.respond(f"❌ Failed to fetch RSS for @{username}\n\nCheck terminal for details.")
+        elif len(entries) == 0:
+            await event.respond(f"⚠️ RSS feed is empty for @{username}\n\nAccount might be private or have no tweets.")
+        else:
+            # Show first few tweets
+            tweet_preview = "\n\n".join([f"• {entry.title[:100]}" for entry in entries[:3]])
+            await event.respond(
+                f"✅ Successfully fetched {len(entries)} tweets!\n\n"
+                f"**First 3 tweets:**\n{tweet_preview}\n\n"
+                f"Scanning for Telegram links..."
+            )
+            
+            # Check for Telegram links
+            links_found = []
+            for entry in entries[:10]:
+                tweet_text = entry.title + " " + entry.description
+                from bs4 import BeautifulSoup
+                soup = BeautifulSoup(tweet_text, 'html.parser')
+                tweet_text = soup.get_text()
+                
+                telegram_links = extract_telegram_links(tweet_text)
+                if telegram_links:
+                    links_found.extend(telegram_links)
+            
+            if links_found:
+                links_text = "\n".join([f"• {link}" for link in links_found])
+                await event.respond(f"🎯 Found {len(links_found)} Telegram link(s):\n\n{links_text}")
+            else:
+                await event.respond(f"ℹ️ No Telegram links found in recent tweets from @{username}")
+        
+        print(f"{'='*60}\n")
+        
+    except IndexError:
+        await event.respond("Usage: /test @username\n\nExample: /test elonmusk")
+    except Exception as e:
+        await event.respond(f"❌ Error: {str(e)}")
     """Handle /stats command"""
     stats = get_stats()
     accounts = get_monitored_accounts()
@@ -613,6 +680,10 @@ async def main():
     @bot.on(events.NewMessage(pattern='/stats', from_users=ADMIN_USER_ID))
     async def stats_handler(event):
         await stats_command(event, bot)
+    
+    @bot.on(events.NewMessage(pattern='/test', from_users=ADMIN_USER_ID))
+    async def test_handler(event):
+        await test_command(event, bot, rss_monitor)
     
     @bot.on(events.NewMessage(pattern='/help', from_users=ADMIN_USER_ID))
     async def help_handler(event):
