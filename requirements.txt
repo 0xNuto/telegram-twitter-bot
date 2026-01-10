@@ -1,5 +1,5 @@
 telethon
 playwright
 beautifulsoup4
-asyncio
 python-dotenv
+lxml
