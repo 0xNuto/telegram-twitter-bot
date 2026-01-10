@@ -12,15 +12,15 @@ from bs4 import BeautifulSoup
 
 # ============ CONFIGURATION ============
 # Telegram API credentials - Can be set via environment variables or directly
-TELEGRAM_API_ID = os.getenv('TELEGRAM_API_ID', 37901087 )
-TELEGRAM_API_HASH = os.getenv('TELEGRAM_API_HASH', '8cee27b5b47189cebcb36c2a3f1079b3')
-TELEGRAM_PHONE = os.getenv('TELEGRAM_PHONE', '+2348062550412')
+TELEGRAM_API_ID = os.getenv('TELEGRAM_API_ID', 'your_api_id')
+TELEGRAM_API_HASH = os.getenv('TELEGRAM_API_HASH', 'your_api_hash')
+TELEGRAM_PHONE = os.getenv('TELEGRAM_PHONE', 'your_phone_number')
 
 # Telegram BOT credentials
-BOT_TOKEN = os.getenv('BOT_TOKEN', '8561851119:AAHH7_fpn4dJgW6F6oqmzwmWxsr9ypGmiE4')
+BOT_TOKEN = os.getenv('BOT_TOKEN', 'your_bot_token')
 
 # Your Telegram user ID
-ADMIN_USER_ID = int(os.getenv('ADMIN_USER_ID', '1356477152'))
+ADMIN_USER_ID = int(os.getenv('ADMIN_USER_ID', 'your_telegram_user_id'))
 
 # Check interval in seconds (RSS checks)
 CHECK_INTERVAL = 2  # Check every 2 seconds - BLAZING FAST!
@@ -523,8 +523,12 @@ async def main():
         await start_command(event, bot)
     
     # Register callback handler
-    @bot.on(events.CallbackQuery(from_users=ADMIN_USER_ID))
+    @bot.on(events.CallbackQuery())
     async def callback_handler(event):
+        # Only respond to the admin user
+        if event.sender_id != ADMIN_USER_ID:
+            return
+            
         data = event.data.decode('utf-8')
         
         if data == "stats":
