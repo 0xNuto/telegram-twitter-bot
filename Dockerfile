@@ -43,4 +43,4 @@ RUN playwright install-deps chromium
 COPY . .
 
 # Run the bot
-CMD ["python", "bot.py"]
+CMD ["python3", "bot.py"]
