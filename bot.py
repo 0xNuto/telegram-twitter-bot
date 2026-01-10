@@ -3,17 +3,24 @@ import re
 import sqlite3
 from datetime import datetime
 import os
+from dotenv import load_dotenv
 from telethon import TelegramClient, events, Button
 from telethon.tl.functions.messages import ImportChatInviteRequest
 from telethon.tl.functions.channels import JoinChannelRequest
 from playwright.async_api import async_playwright
 from bs4 import BeautifulSoup
 
+# Load environment variables from .env file
+load_dotenv()
+
 # ============ CONFIGURATION ============
+# Telegram API credentials - Can be set via environment variables or directly
 TELEGRAM_API_ID = int(os.getenv('TELEGRAM_API_ID', '37901087'))
 TELEGRAM_API_HASH = os.getenv('TELEGRAM_API_HASH', '8cee27b5b47189cebcb36c2a3f1079b3')
 TELEGRAM_PHONE = os.getenv('TELEGRAM_PHONE', '+2348062550412')
+# Telegram BOT credentials
 BOT_TOKEN = os.getenv('BOT_TOKEN', '8561851119:AAHH7_fpn4dJgW6F6oqmzwmWxsr9ypGmiE4')
+# Your Telegram user ID
 ADMIN_USER_ID = int(os.getenv('ADMIN_USER_ID', '1356477152'))
 
 # Check interval in seconds
