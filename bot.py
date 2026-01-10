@@ -12,12 +12,12 @@ from bs4 import BeautifulSoup
 
 # ============ CONFIGURATION ============
 # Telegram API credentials - Can be set via environment variables or directly
-TELEGRAM_API_ID = os.getenv('TELEGRAM_API_ID', 'your_api_id')
-TELEGRAM_API_HASH = os.getenv('TELEGRAM_API_HASH', 'your_api_hash')
-TELEGRAM_PHONE = os.getenv('TELEGRAM_PHONE', 'your_phone_number')
+TELEGRAM_API_ID = os.getenv('TELEGRAM_API_ID', 37901087 )
+TELEGRAM_API_HASH = os.getenv('TELEGRAM_API_HASH', '8cee27b5b47189cebcb36c2a3f1079b3')
+TELEGRAM_PHONE = os.getenv('TELEGRAM_PHONE', '+2348062550412')
 
 # Telegram BOT credentials
-BOT_TOKEN = os.getenv('BOT_TOKEN', 'your_bot_token')
+BOT_TOKEN = os.getenv('BOT_TOKEN', '8561851119:AAHH7_fpn4dJgW6F6oqmzwmWxsr9ypGmiE4')
 
 # Your Telegram user ID
 ADMIN_USER_ID = int(os.getenv('ADMIN_USER_ID', '1356477152'))
