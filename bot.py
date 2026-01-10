@@ -20,7 +20,7 @@ TELEGRAM_PHONE = os.getenv('TELEGRAM_PHONE', 'your_phone_number')
 BOT_TOKEN = os.getenv('BOT_TOKEN', 'your_bot_token')
 
 # Your Telegram user ID
-ADMIN_USER_ID = int(os.getenv('ADMIN_USER_ID', 'your_telegram_user_id'))
+ADMIN_USER_ID = int(os.getenv('ADMIN_USER_ID', '37901087'))
 
 # Check interval in seconds (RSS checks)
 CHECK_INTERVAL = 2  # Check every 2 seconds - BLAZING FAST!
