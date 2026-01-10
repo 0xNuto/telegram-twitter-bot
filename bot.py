@@ -28,12 +28,6 @@ CHECK_INTERVAL = 2  # Check every 2 seconds - BLAZING FAST!
 # Nitter instances (Twitter mirrors that provide RSS)
 NITTER_INSTANCES = [
     'https://xcancel.com',
-    'https://nitter.poast.org',
-    'https://nitter.privacydev.net',
-    'https://nitter.net',
-    'https://nitter.cz',
-    'https://nitter.privacyredirect.com',
-    'https://nitter.freedit.eu'
 ]
 
 # ============ DATABASE SETUP ============
