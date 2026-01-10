@@ -28,9 +28,14 @@ CHECK_INTERVAL = 2  # Check every 2 seconds - BLAZING FAST!
 # Nitter instances (Twitter mirrors that provide RSS)
 NITTER_INSTANCES = [
     'https://nitter.net',
-    'https://nitter.privacydev.net',
-    'https://nitter.poast.org',
-    'https://nitter.eu.projectsegfau.lt'
+    'https://nitter.cz',
+    'https://nitter.privacyredirect.com',
+    'https://xcancel.com',
+    'https://lightbrd.com',
+     'https://nitter.catsarch.com',
+    'https://nitter.space',
+    
+
 ]
 
 # ============ DATABASE SETUP ============
@@ -233,44 +238,135 @@ class RSSMonitor:
         self.find_working_instance()
     
     def find_working_instance(self):
-        """Find a working Nitter instance"""
+        """Find a working Nitter instance with detailed diagnostics"""
         print("\n🔍 Finding working Nitter instance...")
-        for instance in NITTER_INSTANCES:
+        print(f"   Testing {len(NITTER_INSTANCES)} instances...\n")
+        
+        for i, instance in enumerate(NITTER_INSTANCES, 1):
             try:
-                response = requests.get(f"{instance}/elonmusk", timeout=5)
+                print(f"   [{i}/{len(NITTER_INSTANCES)}] Trying: {instance}")
+                response = requests.get(
+                    f"{instance}/elonmusk", 
+                    timeout=10, 
+                    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'},
+                    allow_redirects=True
+                )
+                
+                # Check response status
                 if response.status_code == 200:
-                    self.working_instance = instance
-                    print(f"✅ Using: {instance}")
-                    return
-            except:
+                    # Verify it's actually working by checking content
+                    if 'tweets' in response.text.lower() or 'timeline' in response.text.lower():
+                        self.working_instance = instance
+                        print(f"   ✅ SUCCESS: {instance} is working!\n")
+                        return
+                    else:
+                        print(f"   ⚠️  {instance} returned 200 but content looks wrong (might be blocked)\n")
+                elif response.status_code == 403:
+                    print(f"   🚫 BLOCKED: {instance} returned 403 Forbidden (you may be IP blocked)\n")
+                elif response.status_code == 429:
+                    print(f"   ⏱️  RATE LIMITED: {instance} returned 429 Too Many Requests\n")
+                elif response.status_code == 503:
+                    print(f"   ⚠️  UNAVAILABLE: {instance} returned 503 Service Unavailable (instance down)\n")
+                elif response.status_code == 404:
+                    print(f"   ❌ NOT FOUND: {instance} returned 404 (instance might be dead)\n")
+                else:
+                    print(f"   ❌ FAILED: {instance} returned status {response.status_code}\n")
+                    
+            except requests.exceptions.Timeout:
+                print(f"   ⏱️  TIMEOUT: {instance} took too long to respond (>10 seconds)\n")
+            except requests.exceptions.ConnectionError as e:
+                error_str = str(e)
+                if 'refused' in error_str.lower():
+                    print(f"   🚫 CONNECTION REFUSED: {instance} rejected the connection\n")
+                elif 'timeout' in error_str.lower():
+                    print(f"   ⏱️  CONNECTION TIMEOUT: {instance} didn't respond in time\n")
+                elif 'name or service not known' in error_str.lower():
+                    print(f"   ❌ DNS ERROR: {instance} domain doesn't exist or can't be resolved\n")
+                else:
+                    print(f"   ❌ CONNECTION ERROR: {instance} - {str(e)[:80]}\n")
+            except requests.exceptions.SSLError:
+                print(f"   🔒 SSL ERROR: {instance} has SSL/certificate issues\n")
+            except Exception as e:
+                print(f"   ❌ UNKNOWN ERROR: {instance} - {type(e).__name__}: {str(e)[:80]}\n")
                 continue
         
-        print("⚠️ No working Nitter instance found, will retry later")
+        print("="*60)
+        print("❌ NO WORKING NITTER INSTANCE FOUND")
+        print("="*60)
+        print("\n📋 Possible reasons:")
+        print("   1. All Nitter instances are currently down")
+        print("   2. Your IP might be blocked by Nitter instances")
+        print("   3. Your internet connection has restrictions")
+        print("   4. Cloudflare or other protection is blocking requests")
+        print("\n💡 Suggestions:")
+        print("   • Try again in 10-15 minutes")
+        print("   • Check if you can access any Nitter site in your browser")
+        print("   • Consider using a VPN if you're blocked")
+        print("   • Switch to Twitter API mode for more reliability")
+        print("="*60 + "\n")
     
     def get_rss_feed(self, username):
-        """Get RSS feed for a Twitter user via Nitter"""
+        """Get RSS feed for a Twitter user via Nitter with detailed diagnostics"""
         if not self.working_instance:
+            print("   ⚠️  No working instance available, searching for one...")
             self.find_working_instance()
             if not self.working_instance:
                 return None
         
         try:
             rss_url = f"{self.working_instance}/{username}/rss"
-            print(f"   Fetching RSS: {rss_url}")
+            print(f"   📡 Fetching RSS: {rss_url}")
             
-            feed = feedparser.parse(rss_url)
+            response = requests.get(
+                rss_url, 
+                timeout=10,
+                headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+            )
             
-            if feed.bozo:  # Feed parsing error
-                print(f"   ⚠️ RSS parsing error, trying next instance...")
-                # Try next instance
-                current_index = NITTER_INSTANCES.index(self.working_instance)
-                next_instance = NITTER_INSTANCES[(current_index + 1) % len(NITTER_INSTANCES)]
-                self.working_instance = next_instance
+            if response.status_code == 200:
+                feed = feedparser.parse(response.content)
+                
+                if feed.bozo:  # Feed parsing error
+                    print(f"   ⚠️  RSS parsing error: {feed.bozo_exception}")
+                    print(f"   🔄 Trying next instance...")
+                    # Try next instance
+                    current_index = NITTER_INSTANCES.index(self.working_instance)
+                    next_instance = NITTER_INSTANCES[(current_index + 1) % len(NITTER_INSTANCES)]
+                    self.working_instance = next_instance
+                    return None
+                
+                if not feed.entries:
+                    print(f"   ⚠️  RSS feed is empty (no tweets found)")
+                    print(f"   💡 Account might be private, suspended, or has no tweets")
+                    return None
+                    
+                print(f"   ✅ Successfully fetched {len(feed.entries)} tweets")
+                return feed.entries
+                
+            elif response.status_code == 403:
+                print(f"   🚫 BLOCKED: RSS feed returned 403 (IP blocked or rate limited)")
+                print(f"   🔄 Trying next instance...")
+                self.find_working_instance()
                 return None
-            
-            return feed.entries
+            elif response.status_code == 404:
+                print(f"   ❌ NOT FOUND: User @{username} not found or account suspended")
+                return None
+            elif response.status_code == 429:
+                print(f"   ⏱️  RATE LIMITED: Too many requests to {self.working_instance}")
+                print(f"   🔄 Trying next instance...")
+                self.find_working_instance()
+                return None
+            else:
+                print(f"   ❌ ERROR: RSS feed returned status {response.status_code}")
+                return None
+                
+        except requests.exceptions.Timeout:
+            print(f"   ⏱️  TIMEOUT: RSS request took too long")
+            print(f"   🔄 Trying next instance...")
+            self.find_working_instance()
+            return None
         except Exception as e:
-            print(f"   ❌ Error fetching RSS: {e}")
+            print(f"   ❌ ERROR fetching RSS: {type(e).__name__}: {str(e)[:100]}")
             return None
     
     def extract_tweet_id(self, link):
