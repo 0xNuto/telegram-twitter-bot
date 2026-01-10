@@ -29,7 +29,6 @@ CHECK_INTERVAL = 2  # Check every 2 seconds - BLAZING FAST!
 NITTER_INSTANCES = [
     'https://xcancel.com',
     
-]
 
 # ============ DATABASE SETUP ============
 def init_db():
@@ -406,7 +405,7 @@ async def start_command(event, bot):
         "• No Twitter API needed\n"
         "• No rate limits\n"
         "• Completely free\n"
-        "• Checks every minute\n\n"
+        "• Checks every 2 seconds\n\n"
         "**Commands:**\n"
         "/add @username - Add account\n"
         "/remove @username - Remove account\n"
@@ -426,7 +425,7 @@ async def add_command(event, bot):
             await event.respond(
                 f"✅ Added @{username} to monitoring list\n"
                 f"🌐 RSS monitoring active!\n\n"
-                f"I'll check for new tweets every minute."
+                f"I'll check for new tweets every 2 seconds."
             )
         else:
             await event.respond(f"⚠️ @{username} is already being monitored")
@@ -461,6 +460,72 @@ async def list_command(event, bot):
         )
     else:
         await event.respond("No accounts being monitored. Use /add @username to start.")
+
+async def stats_command(event, bot):
+    """Handle /stats command"""
+    stats = get_stats()
+    accounts = get_monitored_accounts()
+    monitoring = "🟢 Active (RSS)" if len(accounts) > 0 else "🔴 Inactive"
+    
+    await event.respond(
+        f"**📊 Statistics**\n\n"
+        f"Status: {monitoring}\n"
+        f"Monitored accounts: {stats['monitored']}\n"
+        f"Total links found: {stats['total_links']}\n"
+        f"Groups joined: {stats['joined']}\n"
+        f"Failed joins: {stats['failed']}\n\n"
+        f"🌐 RSS mode = No API limits!"
+    )
+
+async def test_command(event, bot, rss_monitor):
+    """Test RSS fetching for a specific account"""
+    try:
+        username = event.message.text.split()[1].replace('@', '')
+        
+        await event.respond(f"🧪 Testing RSS fetch for @{username}...\n\nCheck your terminal for detailed logs!")
+        
+        print(f"\n{'='*60}")
+        print(f"🧪 MANUAL TEST FOR @{username}")
+        print(f"{'='*60}")
+        
+        entries = rss_monitor.get_rss_feed(username)
+        
+        if entries is None:
+            await event.respond(f"❌ Failed to fetch RSS for @{username}\n\nCheck terminal for details.")
+        elif len(entries) == 0:
+            await event.respond(f"⚠️ RSS feed is empty for @{username}\n\nAccount might be private or have no tweets.")
+        else:
+            # Show first few tweets
+            tweet_preview = "\n\n".join([f"• {entry.title[:100]}" for entry in entries[:3]])
+            await event.respond(
+                f"✅ Successfully fetched {len(entries)} tweets!\n\n"
+                f"**First 3 tweets:**\n{tweet_preview}\n\n"
+                f"Scanning for Telegram links..."
+            )
+            
+            # Check for Telegram links
+            links_found = []
+            for entry in entries[:10]:
+                tweet_text = entry.title + " " + entry.description
+                soup = BeautifulSoup(tweet_text, 'html.parser')
+                tweet_text = soup.get_text()
+                
+                telegram_links = extract_telegram_links(tweet_text)
+                if telegram_links:
+                    links_found.extend(telegram_links)
+            
+            if links_found:
+                links_text = "\n".join([f"• {link}" for link in links_found])
+                await event.respond(f"🎯 Found {len(links_found)} Telegram link(s):\n\n{links_text}")
+            else:
+                await event.respond(f"ℹ️ No Telegram links found in recent tweets from @{username}")
+        
+        print(f"{'='*60}\n")
+        
+    except IndexError:
+        await event.respond("Usage: /test @username\n\nExample: /test elonmusk")
+    except Exception as e:
+        await event.respond(f"❌ Error: {str(e)}")
 
 async def monitoring_loop(bot, user_client, rss_monitor):
     """Main monitoring loop using RSS feeds"""
@@ -743,7 +808,7 @@ async def main():
     print("="*60)
     print("\n📱 Message your bot to begin!\n")
     
-    # Register command handlers
+    # Register command handlers - defined as nested functions to access rss_monitor
     @bot.on(events.NewMessage(pattern='/start', from_users=ADMIN_USER_ID))
     async def start_handler(event):
         await start_command(event, bot)
