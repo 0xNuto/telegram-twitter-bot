@@ -28,6 +28,7 @@ CHECK_INTERVAL = 2  # Check every 2 seconds - BLAZING FAST!
 # Nitter instances (Twitter mirrors that provide RSS)
 NITTER_INSTANCES = [
     'https://xcancel.com',
+]
     
 
 # ============ DATABASE SETUP ============
