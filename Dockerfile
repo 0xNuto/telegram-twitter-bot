@@ -28,7 +28,7 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy requirements first for better caching
+# Copy requirements first (for better Docker caching)
 COPY requirements.txt .
 
 # Install Python dependencies
@@ -39,8 +39,12 @@ RUN pip install --no-cache-dir --upgrade pip && \
 RUN playwright install chromium
 RUN playwright install-deps chromium
 
-# Copy application code
+# Copy session files (THE IMPORTANT PART!)
+# This will copy any .session files from your project directory
+COPY *.session* ./
+
+# Copy all application code
 COPY . .
 
 # Run the bot
-CMD ["python3", "bot.py"]
+CMD ["python", "bot.py"]
