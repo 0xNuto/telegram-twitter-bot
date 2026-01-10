@@ -1,6 +1,6 @@
 import asyncio
 import re
-import sqlite3 
+import sqlite3
 from datetime import datetime
 import os
 from telethon import TelegramClient, events, Button
@@ -28,6 +28,7 @@ CHECK_INTERVAL = 2  # Check every 2 seconds - BLAZING FAST!
 # Nitter instances (Twitter mirrors that provide RSS)
 NITTER_INSTANCES = [
     'https://xcancel.com',
+    
 ]
 
 # ============ DATABASE SETUP ============
@@ -461,7 +462,95 @@ async def list_command(event, bot):
     else:
         await event.respond("No accounts being monitored. Use /add @username to start.")
 
-async def test_command(event, bot, rss_monitor):
+async def monitoring_loop(bot, user_client, rss_monitor):
+    """Main monitoring loop using RSS feeds"""
+    print("🌐 RSS monitoring loop started!\n")
+    
+    while True:
+        try:
+            accounts = get_monitored_accounts()
+            
+            if len(accounts) == 0:
+                await asyncio.sleep(10)
+                continue
+            
+            print(f"\n{'='*60}")
+            print(f"🔍 Checking {len(accounts)} account(s) via RSS at {datetime.now().strftime('%H:%M:%S')}")
+            print(f"{'='*60}")
+            
+            for username in accounts:
+                print(f"\n📡 Checking @{username}...")
+                
+                # Get RSS feed
+                entries = rss_monitor.get_rss_feed(username)
+                
+                if not entries:
+                    print(f"   ⚠️ Could not fetch RSS feed")
+                    continue
+                
+                print(f"   Found {len(entries)} recent tweets")
+                
+                # Process each entry
+                for entry in entries[:10]:  # Check last 10 tweets
+                    tweet_id = rss_monitor.extract_tweet_id(entry.link)
+                    
+                    if not tweet_id or is_tweet_processed(tweet_id):
+                        continue
+                    
+                    # Get tweet content
+                    tweet_text = entry.title + " " + entry.description
+                    
+                    # Remove HTML tags
+                    soup = BeautifulSoup(tweet_text, 'html.parser')
+                    tweet_text = soup.get_text()
+                    
+                    print(f"   📝 New tweet: {tweet_text[:100]}...")
+                    
+                    # Extract Telegram links
+                    telegram_links = extract_telegram_links(tweet_text)
+                    
+                    if telegram_links:
+                        print(f"   🎯 Found {len(telegram_links)} Telegram link(s)!")
+                        
+                        for link in telegram_links:
+                            print(f"\n   📍 Processing: {link}")
+                            link_id = log_detected_link(tweet_id, username, tweet_text, link)
+                            
+                            # Join the group
+                            success, error = await join_telegram_group(user_client, link)
+                            
+                            if success:
+                                update_link_status(link_id, 'joined', datetime.now().isoformat())
+                                await bot.send_message(
+                                    ADMIN_USER_ID,
+                                    f"✅ **Joined new group!**\n\n"
+                                    f"From: @{username}\n"
+                                    f"Link: {link}\n"
+                                    f"Tweet: {tweet_text[:150]}..."
+                                )
+                            else:
+                                update_link_status(link_id, 'failed')
+                                await bot.send_message(
+                                    ADMIN_USER_ID,
+                                    f"❌ **Failed to join group**\n\n"
+                                    f"From: @{username}\n"
+                                    f"Link: {link}\n"
+                                    f"Error: {error}"
+                                )
+                            
+                            await asyncio.sleep(2)  # Rate limiting
+                    
+                    # Mark as processed
+                    mark_tweet_processed(tweet_id, username)
+            
+            print(f"\n💤 Sleeping for {CHECK_INTERVAL} seconds...\n")
+            await asyncio.sleep(CHECK_INTERVAL)
+            
+        except Exception as e:
+            print(f"❌ Error in monitoring loop: {e}")
+            import traceback
+            traceback.print_exc()
+            await asyncio.sleep(60)
     """Test RSS fetching for a specific account"""
     try:
         username = event.message.text.split()[1].replace('@', '')
